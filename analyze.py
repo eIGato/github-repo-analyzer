@@ -50,11 +50,14 @@ def main():
     top_committers = [(v, k) for k, v in top_committers.items()]
     top_committers.sort(reverse=True)
     top_committers = top_committers[:30]
-    longest_login = 0
+    longest_login = len('Login')
     for _, login in top_committers:
         longest_login = max(longest_login, len(login))
+    print('Most active committers:')
+    print(f'Login{" " * (longest_login - len("Login"))} Commits')
     for commit_count, login in top_committers:
         print(f'{login}{" " * (longest_login - len(login))} {commit_count}')
+    print()
 
     # Analyze pull requests.
     open_pulls = repo.get_pulls(state='open')
