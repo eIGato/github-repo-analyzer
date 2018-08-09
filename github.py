@@ -38,3 +38,9 @@ class Repo():
 
     def get_commits(self, sha=None, since=None, until=None):
         return api.get_all_pages(self.path + '/commits', sha=sha, since=since, until=until)
+
+    def get_pulls(self, state='open'):
+        return api.get_all_pages(self.path + '/pulls', state=state)
+
+    def get_issues(self, state='open'):
+        return api.get_all_pages(self.path + '/issues', state=state)
