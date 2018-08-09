@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+"""Script to analyze given repository."""
 from argparse import ArgumentParser
 from datetime import datetime
 from datetime import timedelta
@@ -7,6 +8,11 @@ from github import Repo
 
 
 def parse_args():
+    """Parse command-line args.
+
+    Returns:
+        object: Parsed args.
+    """
     arg_parser = ArgumentParser(description='Program analyzes given Github repository.')
     arg_parser.add_argument('url', help='URL of target repository.')
     arg_parser.add_argument('--branch', help='Target branch (default: master).', default='master')
@@ -15,15 +21,26 @@ def parse_args():
     return arg_parser.parse_args()
 
 
-def is_stale(date_iso, days):
+def is_stale(date_iso: str, days: int) -> bool:
+    """Determine if item created at gived date is stale.
+
+    Args:
+        date_iso (str): Creation date-time of the item in ISO format.
+        days (int): Shelf life of the item.
+
+    Returns:
+        bool: True if stale, False otherwise.
+    """
     date = datetime.strptime(date_iso, '%Y-%m-%dT%H:%M:%SZ')
     return datetime.now() - date > timedelta(days=days)
 
 
 def main():
+    """Script function."""
     args = parse_args()
     repo = Repo(args.url)
 
+    # Analyze commits.
     commits = repo.get_commits(sha=args.branch, since=args.since, until=args.until)
     top_committers = {}
     for commit in commits:
@@ -39,11 +56,13 @@ def main():
     for commit_count, login in top_committers:
         print(f'{login}{" " * (longest_login - len(login))} {commit_count}')
 
+    # Analyze pull requests.
     open_pulls = repo.get_pulls(state='open')
     closed_pulls = repo.get_pulls(state='closed')
     stale_pulls = [*filter(lambda x: is_stale(x['created_at'], 30), open_pulls)]
     print(f'Pull requests: {len(open_pulls)} open, {len(closed_pulls)} closed, {len(stale_pulls)} stale.')
 
+    # Analyze issues.
     open_issues = repo.get_issues(state='open')
     closed_issues = repo.get_issues(state='closed')
     stale_issues = [*filter(lambda x: is_stale(x['created_at'], 14), open_issues)]
