@@ -1,24 +1,35 @@
-from urllib.request import urlopen
+from urllib import request
+from urllib.parse import urlencode
 import json
+import base64
 
 
-class Api:
+PER_PAGE_MAX = 100
+
+
+class Api():
     base_url = 'https://api.github.com'
 
+    def __init__(self):
+        self.auth = 'Basic ' + base64.b64encode(open('auth.txt', 'rb').read()).decode('utf-8')
+
     def get(self, path, **kwargs):
-        url = f'{self.base_url}{path}?' + '&'.join(f'{k}={v}' for k, v in kwargs.items() if v)
-        response = urlopen(url)
+        url = f'{self.base_url}{path}?' + urlencode([*filter(lambda x: x[1], kwargs.items())])
+        rq = request.Request(url)
+        rq.add_header("Authorization", self.auth)
+        response = request.urlopen(rq)
         return json.loads(response.read())
 
     def get_all_pages(self, path, **kwargs):
         result = []
         page = 1
+        kwargs['per_page'] = PER_PAGE_MAX
         while True:
             kwargs['page'] = page
             chunk = self.get(path, **kwargs)
-            if not chunk:
-                return result
             result += chunk
+            if len(chunk) < PER_PAGE_MAX:
+                return result
             page += 1
 
 
