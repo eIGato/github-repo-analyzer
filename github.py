@@ -3,14 +3,60 @@
 Attributes:
     api (Api): Github API instance.
     PER_PAGE_MAX (int): Maximum items count per page.
+    ISO_DATE_FORMAT (str): Date format returned from Github.
 """
 from urllib import request
 from urllib.parse import urlencode
 import json
 import base64
+from datetime import datetime
 
 
 PER_PAGE_MAX = 100
+ISO_DATE_FORMAT = '%Y-%m-%dT%H:%M:%SZ'
+
+
+class Struct():
+
+    """Dot-notated version of dict."""
+
+    def __init__(self, **kwargs):
+        self.__dict__.update(kwargs)
+
+
+class Commit(Struct):
+
+    """Git commit."""
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.author = Struct(**self.author)
+        self.committer = Struct(**self.committer)
+
+
+class Ticket(Struct):
+
+    """Base class for pulls and issues"""
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.created_at = datetime.strptime(self.created_at, ISO_DATE_FORMAT)
+        self.updated_at = datetime.strptime(self.updated_at, ISO_DATE_FORMAT)
+        self.closed_at = self.closed_at and datetime.strptime(self.closed_at, ISO_DATE_FORMAT)
+
+
+class Pull(Ticket):
+
+    """Pull request."""
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.merged_at = self.merged_at and datetime.strptime(self.merged_at, ISO_DATE_FORMAT)
+
+
+class Issue(Ticket):
+
+    """Project issue."""
 
 
 class Api():
@@ -113,7 +159,7 @@ class Repo():
         Returns:
             list: Commits.
         """
-        return api.get_all_pages(self.path + '/commits', sha=sha, since=since, until=until)
+        return [Commit(**d) for d in api.get_all_pages(self.path + '/commits', sha=sha, since=since, until=until)]
 
     def get_pulls(self, state='open') -> list:
         """Get pull requests from the repo.
@@ -124,7 +170,7 @@ class Repo():
         Returns:
             list: Pull requests.
         """
-        return api.get_all_pages(self.path + '/pulls', state=state)
+        return [Pull(**d) for d in api.get_all_pages(self.path + '/pulls', state=state)]
 
     def get_issues(self, state='open') -> list:
         """Get issues from the repo.
@@ -135,4 +181,4 @@ class Repo():
         Returns:
             list: Issues.
         """
-        return api.get_all_pages(self.path + '/issues', state=state)
+        return [Issue(**d) for d in api.get_all_pages(self.path + '/issues', state=state)]

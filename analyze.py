@@ -21,17 +21,16 @@ def parse_args():
     return arg_parser.parse_args()
 
 
-def is_stale(date_iso: str, days: int) -> bool:
+def is_stale(date: datetime, days: int) -> bool:
     """Determine if item created at gived date is stale.
 
     Args:
-        date_iso (str): Creation date-time of the item in ISO format.
+        date (datetime): Creation date-time of the item.
         days (int): Shelf life of the item.
 
     Returns:
         bool: True if stale, False otherwise.
     """
-    date = datetime.strptime(date_iso, '%Y-%m-%dT%H:%M:%SZ')
     return datetime.now() - date > timedelta(days=days)
 
 
@@ -44,7 +43,7 @@ def main():
     commits = repo.get_commits(sha=args.branch, since=args.since, until=args.until)
     top_committers = {}
     for commit in commits:
-        author_login = commit['author']['login']
+        author_login = commit.author.login
         top_committers.setdefault(author_login, 0)
         top_committers[author_login] += 1
     top_committers = [(v, k) for k, v in top_committers.items()]
@@ -62,13 +61,13 @@ def main():
     # Analyze pull requests.
     open_pulls = repo.get_pulls(state='open')
     closed_pulls = repo.get_pulls(state='closed')
-    stale_pulls = [*filter(lambda x: is_stale(x['created_at'], 30), open_pulls)]
+    stale_pulls = [*filter(lambda x: is_stale(x.created_at, 30), open_pulls)]
     print(f'Pull requests: {len(open_pulls)} open, {len(closed_pulls)} closed, {len(stale_pulls)} stale.')
 
     # Analyze issues.
     open_issues = repo.get_issues(state='open')
     closed_issues = repo.get_issues(state='closed')
-    stale_issues = [*filter(lambda x: is_stale(x['created_at'], 14), open_issues)]
+    stale_issues = [*filter(lambda x: is_stale(x.created_at, 14), open_issues)]
     print(f'Issues: {len(open_issues)} open, {len(closed_issues)} closed, {len(stale_issues)} stale.')
 
 
