@@ -1,10 +1,33 @@
 #!/usr/bin/env python3
-"""Script to analyze given repository."""
+"""Script to analyze given repository.
+
+Attributes:
+    SIMPLE_DATE_FORMAT (str): Date format to specify only date.
+"""
 from argparse import ArgumentParser
 from datetime import datetime
 from datetime import timedelta
 
 from github import Repo
+from github import ISO_DATE_FORMAT
+
+
+SIMPLE_DATE_FORMAT = '%Y-%m-%d'
+
+
+def parse_date(date_iso: str) -> datetime:
+    """Parse date-time arg.
+
+    Args:
+        date_iso (str): Date or date-time in ISO format.
+
+    Returns:
+        datetime: Parsed date.
+    """
+    try:
+        return datetime.strptime(date_iso, ISO_DATE_FORMAT)
+    except ValueError:
+        return datetime.strptime(date_iso, SIMPLE_DATE_FORMAT)
 
 
 def parse_args():
@@ -16,22 +39,53 @@ def parse_args():
     arg_parser = ArgumentParser(description='Program analyzes given Github repository.')
     arg_parser.add_argument('url', help='URL of target repository.')
     arg_parser.add_argument('--branch', help='Target branch (default: master).', default='master')
-    arg_parser.add_argument('--since', help='Date to start analysys from.', default=None)
-    arg_parser.add_argument('--until', help='Date to stop analysys at.', default=None)
+    arg_parser.add_argument('--since', help='Date to start analysys from.', type=parse_date, default=None)
+    arg_parser.add_argument('--until', help='Date to stop analysys at.', type=parse_date, default=None)
     return arg_parser.parse_args()
 
 
-def is_stale(date: datetime, days: int) -> bool:
-    """Determine if item created at gived date is stale.
+def analyze_tickets(repo: Repo, ticket_type: str, since: datetime, until: datetime, shelf_life: timedelta):
+    """Analyze issue-like ticket API.
 
     Args:
-        date (datetime): Creation date-time of the item.
-        days (int): Shelf life of the item.
-
-    Returns:
-        bool: True if stale, False otherwise.
+        repo (Repo): Repo to get tickets from.
+        ticket_type (str): 'pulls' or 'issues'.
+        since (datetime): Analysis start date.
+        until (datetime): Analysis end date.
+        shelf_life (timedelta): Time to become stale.
     """
-    return datetime.now() - date > timedelta(days=days)
+    since = since or datetime.min
+    until = until or datetime.max
+    tickets = repo.get_pulls(state='all') if ticket_type == 'pulls' else repo.get_issues(state='all')
+    opened_tickets = set(filter(
+        lambda x: since <= x.created_at < until,
+        tickets
+    ))
+    closed_tickets = set(filter(
+        lambda x: x.state == 'closed' and since <= x.closed_at < until,
+        tickets
+    ))
+    opened_and_closed_tickets = opened_tickets & closed_tickets
+    still_open_tickets = set(filter(
+        lambda x: x.state == 'open',
+        opened_tickets
+    ))
+    stale_tickets = set(filter(
+        lambda x: since <= x.created_at + shelf_life < until and (
+            x.state == 'open' or x.closed_at >= until
+        ),
+        tickets
+    ))
+    closed_later_count = len(opened_tickets) - len(opened_and_closed_tickets) - len(still_open_tickets)
+    print(f'{len(opened_tickets)} {ticket_type} had been opened.')
+    print(f'    {len(opened_and_closed_tickets)} of them had been closed in the same period.')
+    print(f'    {closed_later_count} of them had been closed later.')
+    print(f'    {len(still_open_tickets)} of them are still open.')
+    print(f'{len(closed_tickets)} {ticket_type} had been closed.')
+    print(f'    {len(opened_and_closed_tickets)} of them had been opened in the same period.')
+    print(f'    {len(closed_tickets) - len(opened_and_closed_tickets)} of them had been opened earlier.')
+    print(f'{len(stale_tickets)} {ticket_type} had become stale.')
+    print()
 
 
 def main():
@@ -59,16 +113,10 @@ def main():
     print()
 
     # Analyze pull requests.
-    open_pulls = repo.get_pulls(state='open')
-    closed_pulls = repo.get_pulls(state='closed')
-    stale_pulls = [*filter(lambda x: is_stale(x.created_at, 30), open_pulls)]
-    print(f'Pull requests: {len(open_pulls)} open, {len(closed_pulls)} closed, {len(stale_pulls)} stale.')
+    analyze_tickets(repo, 'pulls', since=args.since, until=args.until, shelf_life=timedelta(days=30))
 
     # Analyze issues.
-    open_issues = repo.get_issues(state='open')
-    closed_issues = repo.get_issues(state='closed')
-    stale_issues = [*filter(lambda x: is_stale(x.created_at, 14), open_issues)]
-    print(f'Issues: {len(open_issues)} open, {len(closed_issues)} closed, {len(stale_issues)} stale.')
+    analyze_tickets(repo, 'issues', since=args.since, until=args.until, shelf_life=timedelta(days=14))
 
 
 if __name__ == '__main__':

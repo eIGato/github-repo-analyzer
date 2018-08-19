@@ -159,6 +159,8 @@ class Repo():
         Returns:
             list: Commits.
         """
+        since = since and since.isoformat(timespec='seconds')
+        until = until and until.isoformat(timespec='seconds')
         return [Commit(**d) for d in api.get_all_pages(self.path + '/commits', sha=sha, since=since, until=until)]
 
     def get_pulls(self, state='open') -> list:
